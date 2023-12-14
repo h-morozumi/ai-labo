@@ -73,3 +73,6 @@ bun run preview
 ```
 
 Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+
+## Nuxt3 + Microsoft EntraID
+Akash52/msal-with-nuxt3: Microsoft Authentication Library (MSAL) with Nuxt 3 https://github.com/Akash52/msal-with-nuxt3/tree/main
