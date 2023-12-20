@@ -1,7 +1,10 @@
 import { defineEventHandler, createError } from "h3";
 
+// ランタイムコンフィグを取得
+const config = useRuntimeConfig();
+
 // Microsoft Graph API の URL
-const graphApiUrl = "https://graph.microsoft.com/v1.0/me";
+const graphApiUrl = config.graphApiUrl as string;
 
 export default defineEventHandler(async (event) => {
   // クライアントサイドでは実行しないようにする（本当は next.config.ts で設定できるはずだがうまくいかない)

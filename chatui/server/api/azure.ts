@@ -1,7 +1,10 @@
 import { defineEventHandler, send } from "h3";
 
+// ランタイムコンフィグを取得
+const config = useRuntimeConfig();
+
 // Microsoft Graph API の URL
-const graphApiUrl = "https://graph.microsoft.com/v1.0/me";
+const graphApiUrl = config.graphApiUrl as string;
 
 // イベントハンドラーを定義します。
 export default defineEventHandler(async (event) => {
