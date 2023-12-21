@@ -1,7 +1,7 @@
 <template>
     <h2>Avatar Screen</h2>
     <div>
-        <textarea rows="50" cols="100">{{ spokenText }}</textarea>
+        <textarea rows="10" cols="40" v-model="spokenText"></textarea>
         <button @click="speak">Speak</button>
     </div>
     <div>
@@ -21,6 +21,7 @@ avatar.startSession("videoElm", "audioElm");
 
 // テキストを読み上げる
 const speak = async () => {
+    console.log(`speak: ${spokenText.value}`);
     avatar.speak(spokenText.value);
     spokenText.value = "";
 }

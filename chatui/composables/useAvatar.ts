@@ -1,107 +1,120 @@
 import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
 
 export const useAvatar = () => {
+  console.log("useAvatar.ts is running");
+
+  // WebRTCが動作しているかどうかを確認する
+  const isAvatarRunning = ref(false);
+
   // ランタイムコンフィグを取得
   const config = useRuntimeConfig();
-  const speechKey: string = config.public.speechApiKey;
-  const speechRegion: string = config.public.speechRegion;
+  const {
+    speechApiKey,
+    speechRegion,
+    iceServerUrl,
+    iceServerUsername,
+    iceServerCredential,
+  } = config.public;
 
-  // テキスト読み上げ言語と音声変換を選択する
+  // Speech SDKの設定
   let speechConfig = SpeechSDK.SpeechConfig.fromSubscription(
-    speechKey,
+    speechApiKey,
     speechRegion
   );
-  // set default language
-  speechConfig.speechSynthesisLanguage = "en-US";
-  speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural";
+  speechConfig.speechSynthesisLanguage = "en-US"; // デフォルト言語を設定
+  speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural"; // デフォルト音声を設定
 
-  // アバターのキャラクターとスタイルを選択する
-  //(リアルタイム API では casual-sitting スタイルのみサポートされています)
-  let avatarConfig: SpeechSDK.AvatarConfig = new SpeechSDK.AvatarConfig(
-    "lisa", // Set avatar character here.
-    "casual-sitting", // Set avatar style here.
-    new SpeechSDK.AvatarVideoFormat()
-  );
-
-  // リアルタイム アバターへの接続を設定する
-  // Create WebRTC peer connection
-  const iceServerURL: string = config.public.iceServerUrl;
-  const username: string = config.public.iceServerUsername;
-  const credential: string = config.public.iceServerCredential;
+  // アバターの設定
+  let avatarConfig = setupAvatarConfig("lisa", "casual-sitting");
 
   let peerConnection: RTCPeerConnection;
   let avatarSynthesizer: SpeechSDK.AvatarSynthesizer;
 
+  // Speech SDK設定の更新
   function setupSpeechConfig(
-    speechSynthesisLanguage: string,
-    speechSynthesisVoiceName: string
+    language: string,
+    voiceName: string
   ): SpeechSDK.SpeechConfig {
-    // Set either the `SpeechSynthesisVoiceName` or `SpeechSynthesisLanguage`.
-    speechConfig.speechSynthesisLanguage = speechSynthesisLanguage; //ja-JP
-    speechConfig.speechSynthesisVoiceName = speechSynthesisVoiceName; //ja-JP-NanamiNeural
+    speechConfig.speechSynthesisLanguage = language; //ja-JP
+    speechConfig.speechSynthesisVoiceName = voiceName; //ja-JP-NanamiNeural
     return speechConfig;
   }
 
+  // アバター設定の更新
   function setupAvatarConfig(
-    avatarCharacter: string,
-    avatarStyle: string
+    character: string,
+    style: string
   ): SpeechSDK.AvatarConfig {
-    avatarConfig = new SpeechSDK.AvatarConfig(
-      avatarCharacter, // Set avatar character here.
-      avatarStyle, // Set avatar style here.
+    return new SpeechSDK.AvatarConfig(
+      character,
+      style,
       new SpeechSDK.AvatarVideoFormat()
     );
-    return avatarConfig;
   }
 
+  // セッションの開始
   function startSession(videoElementId: string, audioElementId: string) {
-    peerConnection = new RTCPeerConnection({
-      iceServers: [
-        {
-          urls: [iceServerURL],
-          username: username,
-          credential: credential,
-        },
-      ],
+    peerConnection = setupPeerConnection(
+      iceServerUrl,
+      iceServerUsername,
+      iceServerCredential
+    );
+    setupMediaTracks(peerConnection, videoElementId, audioElementId);
+    startAvatarSynthesis(peerConnection);
+  }
+
+  // WebRTC接続の設定
+  function setupPeerConnection(
+    url: string,
+    username: string,
+    credential: string
+  ): RTCPeerConnection {
+    const connection = new RTCPeerConnection({
+      iceServers: [{ urls: [url], username, credential }],
     });
-
     console.log("Created peer connection object");
-    console.log(peerConnection);
-    // Fetch WebRTC video/audio streams and mount them to HTML video/audio player elements
-    peerConnection.ontrack = async (event: RTCTrackEvent) => {
-      if (event.track.kind === "video") {
-        console.log("Got video track");
-        const videoElement: HTMLVideoElement = document.getElementById(
-          videoElementId
-        ) as HTMLVideoElement;
-        videoElement.srcObject = event.streams[0];
-        videoElement.autoplay = true;
-      }
+    return connection;
+  }
 
-      if (event.track.kind === "audio") {
-        console.log("Got audio track");
-        const audioElement: HTMLAudioElement = document.getElementById(
-          audioElementId
-        ) as HTMLAudioElement;
-        audioElement.srcObject = event.streams[0];
-        audioElement.autoplay = true;
-      }
-    };
+  // メディアトラックの設定
+  function setupMediaTracks(
+    connection: RTCPeerConnection,
+    videoId: string,
+    audioId: string
+  ) {
+    connection.ontrack = (event: RTCTrackEvent) =>
+      handleMediaTrack(event, videoId, audioId);
+    connection.addTransceiver("video", { direction: "sendrecv" });
+    connection.addTransceiver("audio", { direction: "sendrecv" });
+  }
 
-    // Offer to receive one video track, and one audio track
-    peerConnection.addTransceiver("video", { direction: "sendrecv" });
-    peerConnection.addTransceiver("audio", { direction: "sendrecv" });
+  // メディアトラックのハンドリング
+  function handleMediaTrack(
+    event: RTCTrackEvent,
+    videoId: string,
+    audioId: string
+  ) {
+    if (event.track.kind === "video") {
+      const videoElement = document.getElementById(videoId) as HTMLVideoElement;
+      videoElement.srcObject = event.streams[0];
+      videoElement.autoplay = true;
+    }
+    if (event.track.kind === "audio") {
+      const audioElement = document.getElementById(audioId) as HTMLAudioElement;
+      audioElement.srcObject = event.streams[0];
+      audioElement.autoplay = true;
+    }
+  }
 
-    // Create avatar synthesizer
+  // アバターの合成開始
+  function startAvatarSynthesis(connection: RTCPeerConnection) {
     avatarSynthesizer = new SpeechSDK.AvatarSynthesizer(
       speechConfig,
       avatarConfig
     );
-
-    // Start avatar and establish WebRTC connection
     avatarSynthesizer
-      .startAvatarAsync(peerConnection)
-      .then((r) => {
+      .startAvatarAsync(connection)
+      .then(() => {
         console.log("Avatar started.");
       })
       .catch((error: any) => {
@@ -109,52 +122,60 @@ export const useAvatar = () => {
       });
   }
 
-  function speak(spokenText: string) {
+  // テキストの読み上げ
+  function speak(text: string) {
     avatarSynthesizer
-      .speakTextAsync(spokenText)
-      .then((result) => {
-        if (
-          result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted
-        ) {
-          console.log("Speech and avatar synthesized to video stream.");
-        } else {
-          console.log("Unable to speak. Result ID: " + result.resultId);
-          if (result.reason === SpeechSDK.ResultReason.Canceled) {
-            let cancellationDetails = SpeechSDK.CancellationDetails.fromResult(
-              result as SpeechSDK.SpeechSynthesisResult
-            );
-            console.log(cancellationDetails.reason);
-            if (
-              cancellationDetails.reason === SpeechSDK.CancellationReason.Error
-            ) {
-              console.log(cancellationDetails.errorDetails);
-            }
-          }
-        }
-      })
-      .catch((error) => {
-        console.log(error);
-        avatarSynthesizer.close();
-      });
+      .speakTextAsync(text)
+      .then(handleSpeakSuccess)
+      .catch(handleSpeakError);
   }
 
+  // 読み上げ成功時の処理
+  function handleSpeakSuccess(result: SpeechSDK.SynthesisResult) {
+    if (result.reason === SpeechSDK.ResultReason.SynthesizingAudioCompleted) {
+      console.log("Speech and avatar synthesized to video stream.");
+    } else {
+      console.log("Unable to speak. Result ID: " + result.resultId);
+      handleCancellation(result as SpeechSDK.SpeechSynthesisResult);
+    }
+  }
+
+  // 読み上げ失敗時の処理
+  function handleSpeakError(error: any) {
+    console.log(error);
+    avatarSynthesizer.close();
+  }
+
+  // 読み上げキャンセル時の処理
+  function handleCancellation(result: SpeechSDK.SpeechSynthesisResult) {
+    let cancellationDetails = SpeechSDK.CancellationDetails.fromResult(result);
+    console.log(cancellationDetails.reason);
+    if (cancellationDetails.reason === SpeechSDK.CancellationReason.Error) {
+      console.log(cancellationDetails.errorDetails);
+    }
+  }
+
+  // 読み上げの停止
   function stopSpeaking() {
     avatarSynthesizer
       .stopSpeakingAsync()
-      .then(() => console.log("Stop speaking request sent."))
+      .then(() => {
+        console.log("Stop speaking request sent.");
+      })
       .catch(() => {
         console.log("Stop speaking request failed.");
       });
   }
 
+  // セッションの停止
   function stopSession() {
     avatarSynthesizer.close();
-    // peerConnection.close();
   }
 
   return {
     // avatarSynthesizer,
     // peerConnection,
+    isAvatarRunning,
     speechConfig,
     avatarConfig,
     setupSpeechConfig,
