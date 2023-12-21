@@ -4,7 +4,7 @@ export const useAvatar = () => {
   console.log("useAvatar.ts is running");
 
   // WebRTCが動作しているかどうかを確認する
-  const isAvatarRunning = ref(false);
+  const isAvatarRunning = useState("isAvatarRunning", () => false);
 
   // ランタイムコンフィグを取得
   const config = useRuntimeConfig();
@@ -17,27 +17,39 @@ export const useAvatar = () => {
   } = config.public;
 
   // Speech SDKの設定
-  let speechConfig = SpeechSDK.SpeechConfig.fromSubscription(
-    speechApiKey,
-    speechRegion
-  );
-  speechConfig.speechSynthesisLanguage = "en-US"; // デフォルト言語を設定
-  speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural"; // デフォルト音声を設定
+  const speechConfig = useState("speechConfig", () => {
+    const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(
+      speechApiKey,
+      speechRegion
+    );
+    speechConfig.speechSynthesisLanguage = "en-US"; //ja-JP
+    speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural"; //ja-JP-NanamiNeural
+    return speechConfig;
+  });
 
   // アバターの設定
-  let avatarConfig = setupAvatarConfig("lisa", "casual-sitting");
+  let avatarConfig = useState(
+    "avatarConfig",
+    () =>
+      new SpeechSDK.AvatarConfig(
+        "lisa",
+        "casual-sitting",
+        new SpeechSDK.AvatarVideoFormat()
+      )
+  );
 
-  let peerConnection: RTCPeerConnection;
-  let avatarSynthesizer: SpeechSDK.AvatarSynthesizer;
+  let peerConnection: RTCPeerConnection | undefined;
+  let avatarSynthesizer: SpeechSDK.AvatarSynthesizer | undefined;
+  let speechRecognizer: Ref<SpeechSDK.SpeechRecognizer> | undefined; // マイク入力をする際に使用する
 
   // Speech SDK設定の更新
   function setupSpeechConfig(
     language: string,
     voiceName: string
   ): SpeechSDK.SpeechConfig {
-    speechConfig.speechSynthesisLanguage = language; //ja-JP
-    speechConfig.speechSynthesisVoiceName = voiceName; //ja-JP-NanamiNeural
-    return speechConfig;
+    speechConfig.value.speechSynthesisLanguage = language; //ja-JP
+    speechConfig.value.speechSynthesisVoiceName = voiceName; //ja-JP-NanamiNeural
+    return speechConfig.value;
   }
 
   // アバター設定の更新
@@ -45,15 +57,23 @@ export const useAvatar = () => {
     character: string,
     style: string
   ): SpeechSDK.AvatarConfig {
-    return new SpeechSDK.AvatarConfig(
-      character,
-      style,
-      new SpeechSDK.AvatarVideoFormat()
-    );
+    avatarConfig.value.character = character;
+    avatarConfig.value.style = style;
+    return avatarConfig.value;
   }
 
   // セッションの開始
   function startSession(videoElementId: string, audioElementId: string) {
+    isAvatarRunning.value = false;
+    speechRecognizer = useState(
+      "speechRecognizer",
+      () =>
+        new SpeechSDK.SpeechRecognizer(
+          speechConfig.value,
+          SpeechSDK.AudioConfig.fromDefaultMicrophoneInput()
+        )
+    );
+
     peerConnection = setupPeerConnection(
       iceServerUrl,
       iceServerUsername,
@@ -109,21 +129,32 @@ export const useAvatar = () => {
   // アバターの合成開始
   function startAvatarSynthesis(connection: RTCPeerConnection) {
     avatarSynthesizer = new SpeechSDK.AvatarSynthesizer(
-      speechConfig,
-      avatarConfig
+      speechConfig.value,
+      avatarConfig.value
     );
     avatarSynthesizer
       .startAvatarAsync(connection)
       .then(() => {
         console.log("Avatar started.");
+        isAvatarRunning.value = true;
       })
       .catch((error: any) => {
         console.log("Avatar failed to start. Error: " + error);
+        isAvatarRunning.value = false;
       });
+    avatarSynthesizer.avatarEventReceived = function (s, e) {
+      let offsetMessage =
+        ", offset from session start: " + e.offset / 10000 + "ms.";
+      if (e.offset === 0) {
+        offsetMessage = "";
+      }
+      console.log("Event received: " + e.description + offsetMessage);
+    };
   }
 
   // テキストの読み上げ
   function speak(text: string) {
+    if (!avatarSynthesizer) return;
     avatarSynthesizer
       .speakTextAsync(text)
       .then(handleSpeakSuccess)
@@ -143,7 +174,8 @@ export const useAvatar = () => {
   // 読み上げ失敗時の処理
   function handleSpeakError(error: any) {
     console.log(error);
-    avatarSynthesizer.close();
+    avatarSynthesizer?.close();
+    isAvatarRunning.value = false;
   }
 
   // 読み上げキャンセル時の処理
@@ -152,11 +184,13 @@ export const useAvatar = () => {
     console.log(cancellationDetails.reason);
     if (cancellationDetails.reason === SpeechSDK.CancellationReason.Error) {
       console.log(cancellationDetails.errorDetails);
+      isAvatarRunning.value = false;
     }
   }
 
   // 読み上げの停止
   function stopSpeaking() {
+    if (!avatarSynthesizer) return;
     avatarSynthesizer
       .stopSpeakingAsync()
       .then(() => {
@@ -164,17 +198,22 @@ export const useAvatar = () => {
       })
       .catch(() => {
         console.log("Stop speaking request failed.");
+        isAvatarRunning.value = false;
       });
   }
 
   // セッションの停止
   function stopSession() {
-    avatarSynthesizer.close();
+    speechRecognizer?.stopContinuousRecognitionAsync();
+    speechRecognizer?.close();
+    avatarSynthesizer?.close();
+    isAvatarRunning.value = false;
   }
 
   return {
     // avatarSynthesizer,
     // peerConnection,
+    speechRecognizer,
     isAvatarRunning,
     speechConfig,
     avatarConfig,

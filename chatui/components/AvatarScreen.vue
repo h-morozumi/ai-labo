@@ -2,7 +2,8 @@
     <h2>Avatar Screen</h2>
     <div>
         <textarea rows="10" cols="40" v-model="spokenText"></textarea>
-        <button @click="speak">Speak</button>
+        <button @click="speak" :disabled="!avatar.isAvatarRunning.value">Speak</button>
+        {{ avatar.isAvatarRunning.value ? "Avatar is running" : "Avatar is not running" }}
     </div>
     <div>
         <video id="videoElm"></video>
@@ -11,6 +12,7 @@
 </template>
 <script setup lang="ts">
 import { useAvatar } from "~/composables/useAvatar";
+
 const avatar = useAvatar();
 const spokenText = ref("");
 
