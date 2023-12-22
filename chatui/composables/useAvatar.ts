@@ -104,8 +104,29 @@ export const useAvatar = () => {
   ) {
     connection.ontrack = (event: RTCTrackEvent) =>
       handleMediaTrack(event, videoId, audioId);
+      watchConnectionChange(connection);
     connection.addTransceiver("video", { direction: "sendrecv" });
     connection.addTransceiver("audio", { direction: "sendrecv" });
+  }
+
+  function watchConnectionChange(connection: RTCPeerConnection) {
+    connection.onconnectionstatechange = (event) => {
+      switch (connection.connectionState) {
+        case "connected":
+          console.log("Peer connection is connected.");
+          isAvatarRunning.value = true;
+          break;
+        case "disconnected":
+        case "failed":
+          console.log("Peer connection is disconnected.");
+          isAvatarRunning.value = false;
+          break;
+        case "closed":
+          console.log("Peer connection is closed.");
+          isAvatarRunning.value = false;
+          break;
+      }
+    };
   }
 
   // メディアトラックのハンドリング
