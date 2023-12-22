@@ -22,13 +22,15 @@ export const useAvatar = () => {
       speechApiKey,
       speechRegion
     );
-    speechConfig.speechSynthesisLanguage = "en-US"; //ja-JP
-    speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural"; //ja-JP-NanamiNeural
+    speechConfig.speechSynthesisLanguage = "en-US";
+    speechConfig.speechSynthesisVoiceName = "en-US-JennyNeural";
+    speechConfig.speechRecognitionLanguage = "en-US";
     return speechConfig;
   });
 
   // アバターの設定
-  let avatarConfig = useState(
+  // リアルタイムでは、Lisa と casual-sitting のみサポートされる
+  const avatarConfig = useState(
     "avatarConfig",
     () =>
       new SpeechSDK.AvatarConfig(
@@ -38,17 +40,23 @@ export const useAvatar = () => {
       )
   );
 
-  let peerConnection: RTCPeerConnection | undefined;
+  const peerConnection = setupPeerConnection(
+    iceServerUrl,
+    iceServerUsername,
+    iceServerCredential
+  );
   let avatarSynthesizer: SpeechSDK.AvatarSynthesizer | undefined;
-  let speechRecognizer: Ref<SpeechSDK.SpeechRecognizer> | undefined; // マイク入力をする際に使用する
+  let speechRecognizer: SpeechSDK.SpeechRecognizer | undefined; // マイク入力をする際に使用する
+  
 
   // Speech SDK設定の更新
   function setupSpeechConfig(
     language: string,
     voiceName: string
   ): SpeechSDK.SpeechConfig {
-    speechConfig.value.speechSynthesisLanguage = language; //ja-JP
-    speechConfig.value.speechSynthesisVoiceName = voiceName; //ja-JP-NanamiNeural
+    speechConfig.value.speechSynthesisLanguage = language;
+    speechConfig.value.speechSynthesisVoiceName = voiceName;
+    speechConfig.value.speechRecognitionLanguage = language;
     return speechConfig.value;
   }
 
@@ -64,23 +72,25 @@ export const useAvatar = () => {
 
   // セッションの開始
   function startSession(videoElementId: string, audioElementId: string) {
+    // 既にセッションが開始している場合は、セッションを停止する
+    if (isAvatarRunning.value) {
+      stopSession();
+    }
     isAvatarRunning.value = false;
-    speechRecognizer = useState(
-      "speechRecognizer",
-      () =>
-        new SpeechSDK.SpeechRecognizer(
+    console.log(`speechConfig.language: ${speechConfig.value.speechSynthesisLanguage}`);
+    console.log(`speechConfig.voiceName: ${speechConfig.value.speechSynthesisVoiceName}`);
+    speechRecognizer = new SpeechSDK.SpeechRecognizer(
           speechConfig.value,
           SpeechSDK.AudioConfig.fromDefaultMicrophoneInput()
-        )
-    );
+        );
 
-    peerConnection = setupPeerConnection(
-      iceServerUrl,
-      iceServerUsername,
-      iceServerCredential
-    );
     setupMediaTracks(peerConnection, videoElementId, audioElementId);
     startAvatarSynthesis(peerConnection);
+  }
+
+  // SpeechRecognizerの取得
+  function getSpeechRecognizer(): SpeechSDK.SpeechRecognizer | undefined {
+    return speechRecognizer;
   }
 
   // WebRTC接続の設定
@@ -104,13 +114,15 @@ export const useAvatar = () => {
   ) {
     connection.ontrack = (event: RTCTrackEvent) =>
       handleMediaTrack(event, videoId, audioId);
-      watchConnectionChange(connection);
+    watchConnectionChange(connection);
     connection.addTransceiver("video", { direction: "sendrecv" });
     connection.addTransceiver("audio", { direction: "sendrecv" });
   }
 
+  // WebRTC接続の状態を監視
   function watchConnectionChange(connection: RTCPeerConnection) {
     connection.onconnectionstatechange = (event) => {
+      console.log("WebRTC status: " + connection.iceConnectionState);
       switch (connection.connectionState) {
         case "connected":
           console.log("Peer connection is connected.");
@@ -139,11 +151,19 @@ export const useAvatar = () => {
       const videoElement = document.getElementById(videoId) as HTMLVideoElement;
       videoElement.srcObject = event.streams[0];
       videoElement.autoplay = true;
+      videoElement.playsInline = true; // add 2023/12/22
+      videoElement.onplaying = () => {
+        console.log(`WebRTC ${event.track.kind} channel connected.`);
+        // TODO ここでマイクロホンとセッションをディスエイブルにしている
+      };
     }
     if (event.track.kind === "audio") {
       const audioElement = document.getElementById(audioId) as HTMLAudioElement;
       audioElement.srcObject = event.streams[0];
       audioElement.autoplay = true;
+      audioElement.onplaying = () => {
+        console.log(`WebRTC ${event.track.kind} channel connected.`);
+      };
     }
   }
 
@@ -225,19 +245,26 @@ export const useAvatar = () => {
 
   // セッションの停止
   function stopSession() {
-    speechRecognizer?.stopContinuousRecognitionAsync();
-    speechRecognizer?.close();
-    avatarSynthesizer?.close();
-    isAvatarRunning.value = false;
+    try {
+      speechRecognizer?.stopContinuousRecognitionAsync();
+      speechRecognizer?.close();
+      avatarSynthesizer?.close();
+      peerConnection?.close();
+    } catch (error) {
+      console.log(error);
+    }
+    // 1秒待機してから、isAvatarRunningをfalseにする
+    setTimeout(() => {
+      console.log("Session stopped.");
+      isAvatarRunning.value = false;
+    }, 1000);
   }
 
   return {
-    // avatarSynthesizer,
-    // peerConnection,
-    speechRecognizer,
     isAvatarRunning,
     speechConfig,
     avatarConfig,
+    getSpeechRecognizer,
     setupSpeechConfig,
     setupAvatarConfig,
     startSession,
