@@ -1,8 +1,9 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { defineNuxtConfig } from 'nuxt/config'
+
 export default defineNuxtConfig({
   devtools: {
     enabled: true,
-
     timeline: {
       enabled: true,
     },
@@ -27,7 +28,9 @@ export default defineNuxtConfig({
     },
     // The private keys which are only available server-side
     // MS Graph API
-    graphApiUrl: 'https://graph.microsoft.com/v1.0/me', // Microsoft Graph API URL
-    
+    graphApiUrl: 'https://graph.microsoft.com/v1.0/me', // Microsoft Graph API URL  
+    openAi: {
+      apiKey: process.env.OPENAI_API_KEY,
+    }
   },
 });

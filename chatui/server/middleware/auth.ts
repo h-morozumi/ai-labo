@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
   event.context.user = userData;
 });
 
+// TODO 後で型を定義する
 async function verifyToken(token: string) {
   try {
     // Fetch API を使用してユーザー情報を取得します。
