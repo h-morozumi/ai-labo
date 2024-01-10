@@ -19,7 +19,8 @@
 		"ghcr.io/rchaganti/vsc-devcontainer-features/azurebicep:1": {},
 		"ghcr.io/stuartleeks/dev-container-features/azure-cli-persistence:0": {},
 		"ghcr.io/jlaundry/devcontainer-features/azure-functions-core-tools:1": {},
-		"ghcr.io/azure/azure-dev/azd:0": {}
+		"ghcr.io/azure/azure-dev/azd:0": {},
+		"ghcr.io/devcontainers-contrib/features/redis-homebrew:1": {}
 	}
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
