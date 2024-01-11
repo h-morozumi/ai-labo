@@ -1,12 +1,31 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { defineNuxtConfig } from 'nuxt/config'
+import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
 
 export default defineNuxtConfig({
   devtools: {
-    enabled: true,
+    enabled: false,
     timeline: {
-      enabled: true,
+      enabled: false,
     },
+  },
+  build: {
+    transpile: ['vuetify'],
+  },
+  modules: [
+    (_options, nuxt) => {
+      nuxt.hooks.hook('vite:extendConfig', (config) => {
+        // @ts-expect-error
+        config.plugins.push(vuetify({ autoImport: true }))
+      })
+    },
+  ],
+  vite: {
+    vue: {
+      template: {
+        transformAssetUrls,
+      }
+    }
   },
   ssr: false,
   plugins: [{ src: "~/plugins/msal.ts", mode: "client" }],
