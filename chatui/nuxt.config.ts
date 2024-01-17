@@ -25,7 +25,18 @@ export default defineNuxtConfig({
       template: {
         transformAssetUrls,
       }
-    }
+    },
+    build: {
+      target: ['esnext','es2022'],
+    },
+    esbuild: {
+      target: "es2022",
+    },
+    optimizeDeps: {
+      esbuildOptions: {
+        target: "es2022",
+      },
+    },
   },
   ssr: false,
   plugins: [{ src: "~/plugins/msal.ts", mode: "client" }],
